@@ -1,0 +1,43 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user of the application",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "User's full name" },
+        "email": { "type": "string", "format": "email", "description": "User's email address" },
+        "role": { "type": "string", "enum": ["admin", "user"], "description": "User's role" }
+      },
+      "required": ["name", "email", "role"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "A service booking order",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "ID of the user who placed the order" },
+        "name": { "type": "string", "description": "Customer name" },
+        "phone": { "type": "string", "description": "Customer phone number" },
+        "dateTime": { "type": "string", "description": "Booking date and time" },
+        "address": { "type": "string", "description": "House No / Building No" },
+        "location": { "type": "string", "description": "Geolocation or manual location" },
+        "serviceType": { "type": "string", "enum": ["Ladies Service", "Gents Service"], "description": "Type of service" },
+        "status": { "type": "string", "enum": ["Pending", "Accepted", "Done"], "description": "Order status" },
+        "price": { "type": "number", "description": "Price of the service" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["userId", "name", "phone", "dateTime", "address", "location", "serviceType", "status", "price", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profiles"
+    },
+    "/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/Order" },
+      "description": "Service booking orders"
+    }
+  }
+}

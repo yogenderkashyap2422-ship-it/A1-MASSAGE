@@ -1,0 +1,7 @@
+{
+  "name": "ServiceBooker Premium",
+  "description": "Premium service booking app like UrbanClap with admin panel and Firebase integration.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}

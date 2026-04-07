@@ -1,0 +1,93 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    // Collection: users
+    // Document ID: userId (matches auth.uid)
+    // Fields:
+    //   - name: string (required)
+    //   - email: string (required, email format)
+    //   - role: string (required, 'admin' or 'user')
+    //
+    // Collection: orders
+    // Document ID: auto-generated
+    // Fields:
+    //   - userId: string (required, matches auth.uid)
+    //   - name: string (required)
+    //   - phone: string (required)
+    //   - dateTime: string (required)
+    //   - address: string (required)
+    //   - location: string (required)
+    //   - serviceType: string (required, 'Ladies Service' or 'Gents Service')
+    //   - status: string (required, 'Pending', 'Accepted', 'Done')
+    //   - price: number (required)
+    //   - createdAt: timestamp (required)
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+        (request.auth.token.email == "ushakashyap2422@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidUser(data) {
+      return hasOnlyAllowedFields(['name', 'email', 'role']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.email is string && isValidEmail(data.email) &&
+             data.role in ['admin', 'user'];
+    }
+
+    function isValidOrder(data) {
+      return hasOnlyAllowedFields(['userId', 'name', 'phone', 'dateTime', 'address', 'location', 'serviceType', 'status', 'price', 'createdAt']) &&
+             data.userId is string && data.userId == request.auth.uid &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.phone is string && data.phone.size() > 0 && data.phone.size() < 20 &&
+             data.dateTime is string && data.dateTime.size() > 0 && data.dateTime.size() < 100 &&
+             data.address is string && data.address.size() > 0 && data.address.size() < 200 &&
+             data.location is string && data.location.size() > 0 && data.location.size() < 200 &&
+             data.serviceType in ['Ladies Body Massage', 'Gents Body Massage'] &&
+             data.status in ['Pending', 'Accepted', 'Done'] &&
+             data.price is number && data.price > 0 &&
+             data.createdAt is timestamp;
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) && 
+                    (request.resource.data.role == 'user' || request.resource.data.role == 'admin');
+      allow update: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) && 
+                    (request.resource.data.role == resource.data.role || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    match /orders/{orderId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && isValidOrder(request.resource.data) && request.resource.data.status == 'Pending';
+      allow update: if isAuthenticated() && isValidOrder(request.resource.data) && 
+                    (
+                      (resource.data.userId == request.auth.uid && request.resource.data.status == resource.data.status && request.resource.data.price == resource.data.price && request.resource.data.createdAt == resource.data.createdAt) || 
+                      isAdmin()
+                    );
+      allow delete: if isAdmin();
+    }
+  }
+}
