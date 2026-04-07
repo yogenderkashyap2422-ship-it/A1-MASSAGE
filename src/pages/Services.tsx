@@ -144,8 +144,8 @@ export function Services() {
       className="min-h-full pb-6 bg-gray-50"
     >
       <div className="bg-emerald-900 px-6 py-8 rounded-b-[2rem] shadow-lg">
-        <h1 className="text-3xl font-bold text-white">Our Services</h1>
-        <p className="text-emerald-100 mt-2">Select a premium service to book an appointment</p>
+        <h1 className="text-3xl font-bold text-white">Book Body Massage in Gurgaon</h1>
+        <p className="text-emerald-100 mt-2">Select a premium spa service to book a doorstep appointment</p>
       </div>
 
       <div className="p-6 space-y-6 -mt-6">
@@ -226,7 +226,7 @@ export function Services() {
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-900 focus:border-transparent outline-none transition-all"
-                    placeholder="+91 98765 43210"
+                    placeholder="+91 98211 96616"
                   />
                 </div>
 
