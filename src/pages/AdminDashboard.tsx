@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, orderBy, doc, updateDoc } from 'firebase/firestore';
-import { Users, Package, Clock, CheckCircle2 } from 'lucide-react';
+import { Users, Package, Clock, CheckCircle2, MapPin, Copy } from 'lucide-react';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 import { motion } from 'motion/react';
@@ -134,6 +134,32 @@ export function AdminDashboard() {
                   <p className="truncate"><strong>Location:</strong> {order.location}</p>
                 </div>
                 
+                <div className="flex gap-2 mb-4">
+                  <button
+                    onClick={() => {
+                      if (order.latitude && order.longitude) {
+                        window.open(`https://www.google.com/maps?q=${order.latitude},${order.longitude}`, '_blank');
+                      } else {
+                        window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.location || order.address)}`, '_blank');
+                      }
+                    }}
+                    className="flex-1 flex items-center justify-center gap-2 bg-blue-50 text-blue-700 py-2 rounded-xl text-sm font-bold hover:bg-blue-100 transition-colors"
+                  >
+                    <MapPin className="w-4 h-4" />
+                    View Location
+                  </button>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(`${order.address}, ${order.location}`);
+                      toast.success('Address copied!');
+                    }}
+                    className="flex items-center justify-center p-2 bg-gray-50 text-gray-700 rounded-xl hover:bg-gray-100 transition-colors border border-gray-200"
+                    title="Copy Address"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
+                </div>
+
                 <div className="flex gap-2">
                   {order.status === 'Pending' && (
                     <button 

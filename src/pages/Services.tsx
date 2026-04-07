@@ -35,6 +35,8 @@ export function Services() {
   const [address, setAddress] = useState('');
   const [location, setLocation] = useState('');
   const [gettingLocation, setGettingLocation] = useState(false);
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
 
   const handleGetLocation = () => {
     setGettingLocation(true);
@@ -47,7 +49,11 @@ export function Services() {
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         try {
-          setLocation(`Lat: ${position.coords.latitude.toFixed(4)}, Lng: ${position.coords.longitude.toFixed(4)} (Gurgaon)`);
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          setLatitude(lat);
+          setLongitude(lng);
+          setLocation(`Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)} (Gurgaon)`);
           toast.success('Location detected!');
         } catch (error) {
           toast.error('Failed to get location details');
@@ -73,7 +79,26 @@ export function Services() {
 
     try {
       setLoading(true);
-      const orderData = {
+      
+      let finalLat = latitude;
+      let finalLng = longitude;
+
+      // Geocode if manual input and no lat/lng
+      if (!finalLat || !finalLng) {
+        try {
+          // Using Nominatim as a free alternative to Google Maps Geocoding API
+          const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(location + ' Gurgaon')}`);
+          const data = await response.json();
+          if (data && data.length > 0) {
+            finalLat = parseFloat(data[0].lat);
+            finalLng = parseFloat(data[0].lon);
+          }
+        } catch (error) {
+          console.error("Geocoding failed", error);
+        }
+      }
+
+      const orderData: any = {
         userId: user.uid,
         name,
         phone,
@@ -86,6 +111,12 @@ export function Services() {
         createdAt: serverTimestamp()
       };
 
+      if (finalLat !== null && finalLat !== undefined && !isNaN(finalLat) && 
+          finalLng !== null && finalLng !== undefined && !isNaN(finalLng)) {
+        orderData.latitude = finalLat;
+        orderData.longitude = finalLng;
+      }
+
       await addDoc(collection(db, 'orders'), orderData);
       toast.success('Booking confirmed successfully!');
       setSelectedService(null);
@@ -95,6 +126,8 @@ export function Services() {
       setDateTime('');
       setAddress('');
       setLocation('');
+      setLatitude(null);
+      setLongitude(null);
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'orders');
       toast.error('Failed to book service. Please try again.');

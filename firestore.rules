@@ -57,13 +57,15 @@ service cloud.firestore {
     }
 
     function isValidOrder(data) {
-      return hasOnlyAllowedFields(['userId', 'name', 'phone', 'dateTime', 'address', 'location', 'serviceType', 'status', 'price', 'createdAt']) &&
+      return hasOnlyAllowedFields(['userId', 'name', 'phone', 'dateTime', 'address', 'location', 'serviceType', 'status', 'price', 'createdAt', 'latitude', 'longitude']) &&
              data.userId is string && data.userId == request.auth.uid &&
-             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
-             data.phone is string && data.phone.size() > 0 && data.phone.size() < 20 &&
-             data.dateTime is string && data.dateTime.size() > 0 && data.dateTime.size() < 100 &&
-             data.address is string && data.address.size() > 0 && data.address.size() < 200 &&
-             data.location is string && data.location.size() > 0 && data.location.size() < 200 &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
+             data.phone is string && data.phone.size() > 0 && data.phone.size() <= 50 &&
+             data.dateTime is string && data.dateTime.size() > 0 && data.dateTime.size() <= 100 &&
+             data.address is string && data.address.size() > 0 && data.address.size() <= 500 &&
+             data.location is string && data.location.size() > 0 && data.location.size() <= 500 &&
+             (!('latitude' in data) || data.latitude is number) &&
+             (!('longitude' in data) || data.longitude is number) &&
              data.serviceType in ['Ladies Body Massage', 'Gents Body Massage'] &&
              data.status in ['Pending', 'Accepted', 'Done'] &&
              data.price is number && data.price > 0 &&

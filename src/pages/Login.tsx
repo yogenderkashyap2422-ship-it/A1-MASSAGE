@@ -5,13 +5,9 @@ import { LogIn } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export function Login() {
-  const { signInWithGoogle, signInWithEmail, signUpWithEmail, user } = useAuth();
+  const { signInWithGoogle, user } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
 
   useEffect(() => {
     if (user) {
@@ -30,40 +26,7 @@ export function Login() {
       navigate('/');
     } catch (error) {
       console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleEmailAuth = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (password.length < 6) {
-      toast.error('Password should be at least 6 characters');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      if (isSignUp) {
-        await signUpWithEmail(email, password, name);
-      } else {
-        await signInWithEmail(email, password);
-      }
-      navigate('/');
-    } catch (error: any) {
-      console.error(error);
-      if (error?.code === 'auth/operation-not-allowed') {
-        toast.error('Email/Password login is not enabled. Please enable it in the Firebase Console under Authentication > Sign-in method.', { duration: 6000 });
-      } else if (error?.code === 'auth/weak-password') {
-        toast.error('Password should be at least 6 characters');
-      } else if (error?.code === 'auth/email-already-in-use') {
-        toast.error('An account with this email already exists');
-      } else if (error?.code === 'auth/invalid-credential') {
-        toast.error('Invalid email or password');
-      } else {
-        toast.error(error.message || 'Authentication failed');
-      }
+      toast.error('Failed to sign in with Google');
     } finally {
       setLoading(false);
     }
@@ -77,74 +40,20 @@ export function Login() {
             <LogIn className="w-8 h-8" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">
-            {isSignUp ? 'Create Account' : 'Welcome Back'}
+            Welcome Back
           </h1>
           <p className="text-sm text-gray-500">
-            {isSignUp ? 'Sign up to book premium services' : 'Sign in to book premium services'}
+            Sign in to book premium services
           </p>
-        </div>
-
-        <form onSubmit={handleEmailAuth} className="space-y-4">
-          {isSignUp && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-              <input
-                required
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-900 focus:border-transparent outline-none transition-all"
-                placeholder="John Doe"
-              />
-            </div>
-          )}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input
-              required
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-900 focus:border-transparent outline-none transition-all"
-              placeholder="you@example.com"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-            <input
-              required
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-900 focus:border-transparent outline-none transition-all"
-              placeholder="••••••••"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-emerald-900 text-white py-3 rounded-xl font-medium hover:bg-emerald-800 transition-all duration-300 disabled:opacity-50 shadow-lg shadow-emerald-900/20"
-          >
-            {isSignUp ? 'Sign Up' : 'Sign In'}
-          </button>
-        </form>
-
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-gray-200"></div>
-          </div>
-          <div className="relative flex justify-center text-sm">
-            <span className="px-2 bg-white text-gray-500">Or continue with</span>
-          </div>
         </div>
 
         <div className="space-y-4">
           <button
             onClick={handleGoogleSignIn}
             disabled={loading}
-            className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-gray-300 rounded-xl text-gray-700 bg-white hover:bg-gray-50 transition-colors font-medium disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-3 px-4 py-4 border border-gray-300 rounded-xl text-gray-700 bg-white hover:bg-gray-50 transition-colors font-bold disabled:opacity-50 shadow-sm"
           >
-            <svg className="w-5 h-5" viewBox="0 0 24 24">
+            <svg className="w-6 h-6" viewBox="0 0 24 24">
               <path
                 d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
                 fill="#4285F4"
@@ -162,19 +71,9 @@ export function Login() {
                 fill="#EA4335"
               />
             </svg>
-            Google
+            Continue with Google
           </button>
         </div>
-
-        <p className="text-center text-sm text-gray-600">
-          {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
-          <button
-            onClick={() => setIsSignUp(!isSignUp)}
-            className="font-medium text-black hover:underline"
-          >
-            {isSignUp ? 'Sign In' : 'Sign Up'}
-          </button>
-        </p>
       </div>
     </div>
   );
