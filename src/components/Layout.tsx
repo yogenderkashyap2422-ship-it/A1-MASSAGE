@@ -2,6 +2,7 @@ import { Outlet, Link } from 'react-router-dom';
 import { BottomNav } from './BottomNav';
 import { useAuth } from '../contexts/AuthContext';
 import { LoginModal } from './LoginModal';
+import { InstallPWA } from './InstallPWA';
 import { User as UserIcon } from 'lucide-react';
 
 export function Layout() {
@@ -40,6 +41,7 @@ export function Layout() {
       </main>
       <BottomNav />
       <LoginModal isOpen={isLoginModalOpen} onClose={closeLoginModal} />
+      <InstallPWA />
     </div>
   );
 }

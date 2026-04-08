@@ -1,15 +1,18 @@
 import { useEffect, useState } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, orderBy, doc, updateDoc } from 'firebase/firestore';
-import { Users, Package, Clock, CheckCircle2, MapPin, Copy } from 'lucide-react';
+import { Users, Package, Clock, CheckCircle2, MapPin, Copy, MessageCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 import { motion } from 'motion/react';
+import { AdminCoupons } from '../components/admin/AdminCoupons';
+import { AdminStaff } from '../components/admin/AdminStaff';
+import { AdminSlots } from '../components/admin/AdminSlots';
 
 export function AdminDashboard() {
   const [orders, setOrders] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'reports' | 'orders' | 'users'>('reports');
+  const [activeTab, setActiveTab] = useState<'reports' | 'orders' | 'users' | 'staff' | 'coupons' | 'slots'>('reports');
 
   useEffect(() => {
     const qOrders = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
@@ -38,6 +41,28 @@ export function AdminDashboard() {
     }
   };
 
+  const updateOrderLocation = async (orderId: string) => {
+    const lat = prompt("Enter new Latitude:");
+    const lng = prompt("Enter new Longitude:");
+    if (lat && lng && !isNaN(Number(lat)) && !isNaN(Number(lng))) {
+      try {
+        await updateDoc(doc(db, 'orders', orderId), { 
+          staffLocationLat: Number(lat),
+          staffLocationLng: Number(lng)
+        });
+        toast.success('Location updated');
+      } catch (error) {
+        handleFirestoreError(error, OperationType.UPDATE, `orders/${orderId}`);
+      }
+    }
+  };
+
+  const sendWhatsApp = (phone: string, orderId: string, status: string) => {
+    const message = `Hello! Your SpaHome order (${orderId}) status is now: ${status}.`;
+    const url = `https://wa.me/${phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`;
+    window.open(url, '_blank');
+  };
+
   const reports = {
     total: orders.length,
     pending: orders.filter(o => o.status === 'Pending').length,
@@ -56,12 +81,12 @@ export function AdminDashboard() {
         <p className="text-emerald-100 mt-1">Manage your premium services</p>
       </div>
 
-      <div className="flex border-b border-gray-200 bg-white sticky top-0 z-10 shadow-sm">
-        {(['reports', 'orders', 'users'] as const).map((tab) => (
+      <div className="flex overflow-x-auto border-b border-gray-200 bg-white sticky top-0 z-10 shadow-sm no-scrollbar">
+        {(['reports', 'orders', 'users', 'staff', 'coupons', 'slots'] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`flex-1 py-4 text-sm font-bold capitalize transition-colors ${
+            className={`flex-none px-6 py-4 text-sm font-bold capitalize transition-colors ${
               activeTab === tab 
                 ? 'text-emerald-900 border-b-2 border-emerald-900' 
                 : 'text-gray-500 hover:text-emerald-700'
@@ -119,6 +144,7 @@ export function AdminDashboard() {
                   <div>
                     <h3 className="font-bold text-gray-900">{order.serviceType}</h3>
                     <p className="text-sm text-gray-500">{order.name} • {order.phone}</p>
+                    <p className="text-sm font-bold text-emerald-900 mt-1">₹{order.finalPrice || order.price}</p>
                   </div>
                   <span className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wider ${
                     order.status === 'Pending' ? 'bg-amber-100 text-amber-700' :
@@ -129,7 +155,9 @@ export function AdminDashboard() {
                   </span>
                 </div>
                 <div className="text-sm text-gray-600 mb-4 bg-gray-50 p-3 rounded-xl border border-gray-100">
-                  <p className="mb-1"><strong>Time:</strong> {order.dateTime ? format(new Date(order.dateTime), 'PP p') : 'N/A'}</p>
+                  <p className="mb-1"><strong>Time:</strong> {order.date ? `${order.date} at ${order.slotTime}` : (order.dateTime ? format(new Date(order.dateTime), 'PP p') : 'N/A')}</p>
+                  {order.staffName && <p className="mb-1"><strong>Staff:</strong> {order.staffName}</p>}
+                  {order.couponCode && <p className="mb-1 text-emerald-600"><strong>Coupon:</strong> {order.couponCode} (-₹{order.discount})</p>}
                   <p className="mb-1"><strong>Address:</strong> {order.address}</p>
                   <p className="truncate"><strong>Location:</strong> {order.location}</p>
                 </div>
@@ -147,6 +175,19 @@ export function AdminDashboard() {
                   >
                     <MapPin className="w-4 h-4" />
                     View Location
+                  </button>
+                  <button
+                    onClick={() => updateOrderLocation(order.id)}
+                    className="flex-1 flex items-center justify-center gap-2 bg-purple-50 text-purple-700 py-2 rounded-xl text-sm font-bold hover:bg-purple-100 transition-colors"
+                  >
+                    Update Loc
+                  </button>
+                  <button
+                    onClick={() => sendWhatsApp(order.phone, order.id, order.status)}
+                    className="flex items-center justify-center p-2 bg-green-50 text-green-700 rounded-xl hover:bg-green-100 transition-colors border border-green-200"
+                    title="Send WhatsApp"
+                  >
+                    <MessageCircle className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => {
@@ -208,6 +249,24 @@ export function AdminDashboard() {
                 </span>
               </div>
             ))}
+          </motion.div>
+        )}
+
+        {activeTab === 'staff' && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <AdminStaff />
+          </motion.div>
+        )}
+
+        {activeTab === 'coupons' && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <AdminCoupons />
+          </motion.div>
+        )}
+
+        {activeTab === 'slots' && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <AdminSlots />
           </motion.div>
         )}
       </div>

@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, onSnapshot, getDoc, doc } from 'firebase/firestore';
 import toast from 'react-hot-toast';
-import { MapPin, Navigation, X } from 'lucide-react';
+import { MapPin, Navigation, X, Clock, User, Tag } from 'lucide-react';
 import { motion } from 'motion/react';
 
 const SERVICES = [
@@ -28,15 +28,51 @@ export function Services() {
   const [selectedService, setSelectedService] = useState<typeof SERVICES[0] | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Data from Firestore
+  const [slots, setSlots] = useState<any[]>([]);
+  const [staffList, setStaffList] = useState<any[]>([]);
+
+  useEffect(() => {
+    const unsubSlots = onSnapshot(query(collection(db, 'slots')), (snapshot) => {
+      const activeSlots = snapshot.docs.map(d => ({ id: d.id, ...d.data() })).filter((s: any) => s.active);
+      setSlots(activeSlots);
+    });
+    const unsubStaff = onSnapshot(query(collection(db, 'staff')), (snapshot) => {
+      const activeStaff = snapshot.docs.map(d => ({ id: d.id, ...d.data() })).filter((s: any) => s.available);
+      setStaffList(activeStaff);
+    });
+    return () => { unsubSlots(); unsubStaff(); };
+  }, []);
+
   // Form State
   const [name, setName] = useState(user?.name || '');
   const [phone, setPhone] = useState('');
-  const [dateTime, setDateTime] = useState('');
+  const [date, setDate] = useState('');
+  const [slotTime, setSlotTime] = useState('');
+  const [staffId, setStaffId] = useState('');
+  const [couponCode, setCouponCode] = useState('');
+  const [discount, setDiscount] = useState(0);
   const [address, setAddress] = useState('');
   const [location, setLocation] = useState('');
   const [gettingLocation, setGettingLocation] = useState(false);
   const [latitude, setLatitude] = useState<number | null>(null);
   const [longitude, setLongitude] = useState<number | null>(null);
+
+  const applyCoupon = async () => {
+    if (!couponCode) return;
+    try {
+      const couponDoc = await getDoc(doc(db, 'coupons', couponCode.toUpperCase()));
+      if (couponDoc.exists() && couponDoc.data().active) {
+        setDiscount(couponDoc.data().discount);
+        toast.success(`Coupon applied! ₹${couponDoc.data().discount} OFF`);
+      } else {
+        toast.error('Invalid or expired coupon');
+        setDiscount(0);
+      }
+    } catch (error) {
+      toast.error('Error applying coupon');
+    }
+  };
 
   const handleGetLocation = () => {
     setGettingLocation(true);
@@ -104,16 +140,25 @@ export function Services() {
         }
       }
 
+      const finalPrice = Math.max(0, selectedService.price - discount);
+      const selectedStaff = staffList.find(s => s.id === staffId);
+
       const orderData: any = {
         userId: user.uid,
         name,
         phone,
-        dateTime,
+        date,
+        slotTime,
         address,
         location,
         serviceType: selectedService.title,
         status: 'Pending',
         price: selectedService.price,
+        finalPrice,
+        couponCode: discount > 0 ? couponCode.toUpperCase() : null,
+        discount,
+        staffId: staffId || null,
+        staffName: selectedStaff ? selectedStaff.name : null,
         createdAt: serverTimestamp()
       };
 
@@ -123,13 +168,22 @@ export function Services() {
         orderData.longitude = finalLng;
       }
 
-      await addDoc(collection(db, 'orders'), orderData);
+      const docRef = await addDoc(collection(db, 'orders'), orderData);
       toast.success('Booking confirmed successfully!');
       setSelectedService(null);
       
+      // Send WhatsApp message
+      const message = `Hello SpaHome! I have booked a ${selectedService.title} for ${date} at ${slotTime}. My order ID is ${docRef.id}.`;
+      const url = `https://wa.me/919821196616?text=${encodeURIComponent(message)}`;
+      window.open(url, '_blank');
+
       // Reset form
       setPhone('');
-      setDateTime('');
+      setDate('');
+      setSlotTime('');
+      setStaffId('');
+      setCouponCode('');
+      setDiscount(0);
       setAddress('');
       setLocation('');
       setLatitude(null);
@@ -236,15 +290,78 @@ export function Services() {
                   />
                 </div>
 
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                    <input
+                      required
+                      type="date"
+                      value={date}
+                      onChange={(e) => setDate(e.target.value)}
+                      min={new Date().toISOString().split('T')[0]}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-900 focus:border-transparent outline-none transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Time Slot</label>
+                    <div className="relative">
+                      <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <select
+                        required
+                        value={slotTime}
+                        onChange={(e) => setSlotTime(e.target.value)}
+                        className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-900 focus:border-transparent outline-none transition-all appearance-none bg-white"
+                      >
+                        <option value="">Select Slot</option>
+                        {slots.map(slot => (
+                          <option key={slot.id} value={slot.time}>{slot.time}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Date & Time</label>
-                  <input
-                    required
-                    type="datetime-local"
-                    value={dateTime}
-                    onChange={(e) => setDateTime(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-900 focus:border-transparent outline-none transition-all"
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Select Staff (Optional)</label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <select
+                      value={staffId}
+                      onChange={(e) => setStaffId(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-900 focus:border-transparent outline-none transition-all appearance-none bg-white"
+                    >
+                      <option value="">Any Available Staff</option>
+                      {staffList.filter(s => selectedService.title.includes(s.gender === 'Female' ? 'Ladies' : 'Gents')).map(staff => (
+                        <option key={staff.id} value={staff.id}>{staff.name} ({staff.experience})</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Coupon Code</label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <input
+                        type="text"
+                        value={couponCode}
+                        onChange={(e) => setCouponCode(e.target.value)}
+                        className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-900 focus:border-transparent outline-none transition-all uppercase"
+                        placeholder="e.g. FIRST50"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={applyCoupon}
+                      className="px-4 py-3 bg-gray-100 text-emerald-900 font-bold rounded-xl hover:bg-gray-200 transition-colors"
+                    >
+                      Apply
+                    </button>
+                  </div>
+                  {discount > 0 && (
+                    <p className="text-sm text-emerald-600 font-medium mt-1">Discount applied: ₹{discount} OFF</p>
+                  )}
                 </div>
 
                 <div>

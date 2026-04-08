@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
-import { Clock, CheckCircle2, Package } from 'lucide-react';
+import { Clock, CheckCircle2, Package, MapPin } from 'lucide-react';
 import { format } from 'date-fns';
 import { motion } from 'motion/react';
 
@@ -124,7 +124,7 @@ export function Orders() {
                 <div>
                   <h3 className="font-bold text-gray-900">{order.serviceType}</h3>
                   <p className="text-sm text-gray-500 mt-1">
-                    {order.dateTime ? format(new Date(order.dateTime), 'MMM dd, yyyy - h:mm a') : 'No date'}
+                    {order.date ? `${order.date} at ${order.slotTime}` : (order.dateTime ? format(new Date(order.dateTime), 'MMM dd, yyyy - h:mm a') : 'No date')}
                   </p>
                 </div>
                 <div className={`px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1.5 ${getStatusColor(order.status)}`}>
@@ -138,8 +138,26 @@ export function Orders() {
                   {order.address}
                 </div>
                 <div className="font-bold text-emerald-900 text-lg">
-                  ₹{order.price}
+                  ₹{order.finalPrice || order.price}
                 </div>
+              </div>
+              
+              <div className="pt-4 mt-2 border-t border-gray-50">
+                <button
+                  onClick={() => {
+                    if (order.staffLocationLat && order.staffLocationLng) {
+                      window.open(`https://www.google.com/maps?q=${order.staffLocationLat},${order.staffLocationLng}`, '_blank');
+                    } else if (order.latitude && order.longitude) {
+                      window.open(`https://www.google.com/maps?q=${order.latitude},${order.longitude}`, '_blank');
+                    } else {
+                      window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.location || order.address)}`, '_blank');
+                    }
+                  }}
+                  className="w-full bg-blue-50 text-blue-700 py-2 rounded-xl text-sm font-bold hover:bg-blue-100 transition-colors flex items-center justify-center gap-2"
+                >
+                  <MapPin className="w-4 h-4" />
+                  Track Service
+                </button>
               </div>
             </motion.div>
           ))

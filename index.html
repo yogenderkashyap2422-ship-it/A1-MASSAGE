@@ -5,11 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="google-site-verification" content="QtA05JdO_EtnfOjt9jjt2w4rgYvUAOskTtnXK52Fvpw" />
     <meta name="description" content="Book professional body massage services in Gurgaon. 24/7 doorstep service for ladies & gents. Affordable and trusted massage center." />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#064e3b" />
     <title>Best Body Massage in Gurgaon | 24/7 Home Service</title>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').then(registration => {
+            console.log('SW registered: ', registration);
+          }).catch(registrationError => {
+            console.log('SW registration failed: ', registrationError);
+          });
+        });
+      }
+    </script>
   </body>
 </html>
 

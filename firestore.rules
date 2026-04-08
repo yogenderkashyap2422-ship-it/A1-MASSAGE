@@ -59,19 +59,52 @@ service cloud.firestore {
     }
 
     function isValidOrder(data) {
-      return hasOnlyAllowedFields(['userId', 'name', 'phone', 'dateTime', 'address', 'location', 'serviceType', 'status', 'price', 'createdAt', 'latitude', 'longitude']) &&
+      return hasOnlyAllowedFields(['userId', 'name', 'phone', 'dateTime', 'date', 'slotTime', 'address', 'location', 'serviceType', 'status', 'price', 'finalPrice', 'couponCode', 'discount', 'staffId', 'staffName', 'staffLocationLat', 'staffLocationLng', 'createdAt', 'latitude', 'longitude']) &&
              data.userId is string && data.userId.size() > 0 &&
              data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
              data.phone is string && data.phone.size() > 0 && data.phone.size() <= 50 &&
-             data.dateTime is string && data.dateTime.size() > 0 && data.dateTime.size() <= 100 &&
+             (!('dateTime' in data) || data.dateTime is string) &&
+             (!('date' in data) || data.date is string) &&
+             (!('slotTime' in data) || data.slotTime is string) &&
              data.address is string && data.address.size() > 0 && data.address.size() <= 500 &&
              data.location is string && data.location.size() > 0 && data.location.size() <= 500 &&
              (!('latitude' in data) || data.latitude is number) &&
              (!('longitude' in data) || data.longitude is number) &&
+             (!('staffLocationLat' in data) || data.staffLocationLat is number) &&
+             (!('staffLocationLng' in data) || data.staffLocationLng is number) &&
              data.serviceType in ['Ladies Body Massage', 'Gents Body Massage'] &&
              data.status in ['Pending', 'Accepted', 'Done'] &&
              data.price is number && data.price > 0 &&
+             (!('finalPrice' in data) || data.finalPrice is number) &&
+             (!('couponCode' in data) || data.couponCode is string) &&
+             (!('discount' in data) || data.discount is number) &&
+             (!('staffId' in data) || data.staffId is string) &&
+             (!('staffName' in data) || data.staffName is string) &&
              data.createdAt is timestamp;
+    }
+
+    function isValidCoupon(data) {
+      return hasOnlyAllowedFields(['code', 'discount', 'expiryDate', 'usageCount', 'active']) &&
+             data.code is string && data.code.size() > 0 &&
+             data.discount is number && data.discount > 0 &&
+             data.expiryDate is string &&
+             data.usageCount is number &&
+             data.active is bool;
+    }
+
+    function isValidStaff(data) {
+      return hasOnlyAllowedFields(['name', 'gender', 'experience', 'photoURL', 'available']) &&
+             data.name is string && data.name.size() > 0 &&
+             data.gender in ['Male', 'Female'] &&
+             data.experience is string &&
+             (!('photoURL' in data) || data.photoURL is string) &&
+             data.available is bool;
+    }
+
+    function isValidSlot(data) {
+      return hasOnlyAllowedFields(['time', 'active']) &&
+             data.time is string && data.time.size() > 0 &&
+             data.active is bool;
     }
 
     match /users/{userId} {
@@ -92,6 +125,21 @@ service cloud.firestore {
                       isAdmin()
                     );
       allow delete: if isAdmin();
+    }
+
+    match /coupons/{couponId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /staff/{staffId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /slots/{slotId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
     }
   }
 }
