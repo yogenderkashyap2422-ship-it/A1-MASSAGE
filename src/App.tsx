@@ -14,6 +14,9 @@ import { Services } from './pages/Services';
 import { Orders } from './pages/Orders';
 import { Profile } from './pages/Profile';
 import { AdminDashboard } from './pages/AdminDashboard';
+import { About } from './pages/About';
+import { Contact } from './pages/Contact';
+import { PrivacyPolicy } from './pages/PrivacyPolicy';
 
 export default function App() {
   return (
@@ -23,14 +26,19 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           
-          <Route element={<ProtectedRoute />}>
-            <Route element={<Layout />}>
-              <Route path="/" element={<Home />} />
-              <Route path="/about" element={<Home />} />
-              <Route path="/services" element={<Services />} />
-              <Route path="/book-massage" element={<Services />} />
+          <Route element={<Layout />}>
+            {/* Public Routes */}
+            <Route path="/" element={<Home />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/contact" element={<Contact />} />
+            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+            <Route path="/services" element={<Services />} />
+            <Route path="/book-massage" element={<Services />} />
+            <Route path="/profile" element={<Profile />} />
+            
+            {/* Protected Routes */}
+            <Route element={<ProtectedRoute />}>
               <Route path="/orders" element={<Orders />} />
-              <Route path="/profile" element={<Profile />} />
               
               {/* Admin Routes */}
               <Route element={<ProtectedRoute requireAdmin={true} />}>

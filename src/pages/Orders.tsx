@@ -17,12 +17,15 @@ interface Order {
 }
 
 export function Orders() {
-  const { user } = useAuth();
+  const { user, openLoginModal } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
 
     const q = query(
       collection(db, 'orders'),
@@ -44,6 +47,26 @@ export function Orders() {
 
     return () => unsubscribe();
   }, [user]);
+
+  if (!user) {
+    return (
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="min-h-full pb-6 bg-gray-50 flex flex-col items-center justify-center p-6 text-center"
+      >
+        <Package className="w-16 h-16 text-emerald-200 mb-4" />
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Please login to view your orders</h2>
+        <p className="text-gray-600 mb-6">You need to be logged in to see your booking history.</p>
+        <button
+          onClick={openLoginModal}
+          className="bg-emerald-900 text-white px-8 py-3 rounded-xl font-bold hover:bg-emerald-800 transition-colors"
+        >
+          Login / Sign Up
+        </button>
+      </motion.div>
+    );
+  }
 
   const getStatusColor = (status: string) => {
     switch (status) {

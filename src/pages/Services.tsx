@@ -24,7 +24,7 @@ const SERVICES = [
 ];
 
 export function Services() {
-  const { user } = useAuth();
+  const { user, openLoginModal } = useAuth();
   const [selectedService, setSelectedService] = useState<typeof SERVICES[0] | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -70,7 +70,13 @@ export function Services() {
 
   const handleBook = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedService || !user) return;
+    if (!selectedService) return;
+
+    if (!user) {
+      toast.error('Please login to continue booking');
+      openLoginModal();
+      return;
+    }
 
     if (!location.toLowerCase().includes('gurgaon')) {
       toast.error('Sorry, we currently only serve locations within Gurgaon.');
