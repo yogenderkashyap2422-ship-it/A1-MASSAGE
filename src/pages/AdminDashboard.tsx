@@ -17,6 +17,10 @@ export function AdminDashboard() {
   const [statusFilter, setStatusFilter] = useState('All');
   const [orderToDelete, setOrderToDelete] = useState<string | null>(null);
   const [orderToEdit, setOrderToEdit] = useState<any | null>(null);
+  const [userToStaff, setUserToStaff] = useState<any | null>(null);
+  const [staffForm, setStaffForm] = useState({ name: '', phone: '', experience: '', gender: 'Male' });
+
+  const [staffList, setStaffList] = useState<any[]>([]);
 
   useEffect(() => {
     const qOrders = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
@@ -29,11 +33,52 @@ export function AdminDashboard() {
       setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'users'));
 
+    const qStaff = query(collection(db, 'staff'));
+    const unsubStaff = onSnapshot(qStaff, (snapshot) => {
+      setStaffList(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'staff'));
+
     return () => {
       unsubOrders();
       unsubUsers();
+      unsubStaff();
     };
   }, []);
+
+  const assignStaff = async (orderId: string, staffId: string) => {
+    try {
+      if (!staffId) {
+        await updateDoc(doc(db, 'orders', orderId), { 
+          staffId: null, 
+          staffName: null,
+          status: 'Pending'
+        });
+        toast.success('Staff unassigned');
+        return;
+      }
+
+      const selectedStaff = staffList.find(s => s.id === staffId);
+      if (!selectedStaff) return;
+
+      await updateDoc(doc(db, 'orders', orderId), {
+        staffId: selectedStaff.userId, // use userId for auth matching
+        staffName: selectedStaff.name,
+        status: 'Assigned',
+        staffAssignedAt: new Date().toISOString()
+      });
+      toast.success(`Order assigned to ${selectedStaff.name}`);
+      
+      // Notify staff
+      if (selectedStaff.phone) {
+        const message = `New Order Assigned! Order ID: ${orderId}. Please check your staff panel.`;
+        const url = `https://wa.me/${selectedStaff.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`;
+        window.open(url, '_blank');
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `orders/${orderId}`);
+      toast.error('Failed to assign staff');
+    }
+  };
 
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
     try {
@@ -116,6 +161,8 @@ export function AdminDashboard() {
     total: orders.filter(o => !o.deleted).length,
     pending: orders.filter(o => !o.deleted && o.status === 'Pending').length,
     completed: orders.filter(o => !o.deleted && o.status === 'Done').length,
+    totalEarnings: orders.filter(o => !o.deleted && o.status === 'Done').reduce((acc, order) => acc + (order.finalPrice || order.price || 0), 0),
+    totalCommission: orders.filter(o => !o.deleted && o.status === 'Done').reduce((acc, order) => acc + (order.adminCommission || 0), 0),
   };
 
   const filteredOrders = orders.filter(order => {
@@ -132,6 +179,38 @@ export function AdminDashboard() {
     
     return true;
   });
+
+  const handleConvertToStaff = async () => {
+    if (!userToStaff || !staffForm.name || !staffForm.phone) {
+      toast.error('Please fill all required fields');
+      return;
+    }
+
+    try {
+      // Create staff document
+      await updateDoc(doc(db, 'users', userToStaff.id), { role: 'staff' });
+      
+      const { addDoc, serverTimestamp } = await import('firebase/firestore');
+      await addDoc(collection(db, 'staff'), {
+        userId: userToStaff.id,
+        name: staffForm.name,
+        email: userToStaff.email,
+        phone: staffForm.phone,
+        experience: staffForm.experience,
+        gender: staffForm.gender,
+        available: true,
+        totalEarnings: 0,
+        totalCommission: 0,
+        createdAt: serverTimestamp()
+      });
+
+      toast.success(`${staffForm.name} is now a staff member`);
+      setUserToStaff(null);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'staff');
+      toast.error('Failed to convert user to staff');
+    }
+  };
 
   return (
     <motion.div 
@@ -192,6 +271,19 @@ export function AdminDashboard() {
                   <CheckCircle2 className="w-6 h-6" />
                 </div>
               </div>
+              <div className="bg-white p-5 rounded-2xl shadow-md border border-gray-100 col-span-2">
+                <h3 className="font-bold text-gray-900 mb-4">Financial Overview</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-gray-500 font-medium mb-1">Total Revenue</p>
+                    <p className="text-2xl font-bold text-emerald-600">₹{reports.totalEarnings}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500 font-medium mb-1">Admin Commission</p>
+                    <p className="text-2xl font-bold text-blue-600">₹{reports.totalCommission}</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </motion.div>
         )}
@@ -239,14 +331,16 @@ export function AdminDashboard() {
                       onChange={(e) => updateOrderStatus(order.id, e.target.value)}
                       className={`px-3 py-1.5 rounded-xl text-xs font-bold uppercase tracking-wider border outline-none cursor-pointer ${
                         order.status === 'Pending' ? 'bg-amber-100 text-amber-700 border-amber-200' :
-                        order.status === 'Accepted' ? 'bg-blue-100 text-blue-700 border-blue-200' :
-                        order.status === 'On the way' ? 'bg-indigo-100 text-indigo-700 border-indigo-200' :
-                        order.status === 'In Progress' ? 'bg-purple-100 text-purple-700 border-purple-200' :
+                        order.status === 'Assigned' ? 'bg-blue-100 text-blue-700 border-blue-200' :
+                        order.status === 'Accepted' ? 'bg-indigo-100 text-indigo-700 border-indigo-200' :
+                        order.status === 'On the way' ? 'bg-purple-100 text-purple-700 border-purple-200' :
+                        order.status === 'In Progress' ? 'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200' :
                         order.status === 'Cancelled' ? 'bg-red-100 text-red-700 border-red-200' :
                         'bg-emerald-100 text-emerald-700 border-emerald-200'
                       }`}
                     >
                       <option value="Pending">Pending</option>
+                      <option value="Assigned">Assigned</option>
                       <option value="Accepted">Accepted</option>
                       <option value="On the way">On the way</option>
                       <option value="In Progress">In Progress</option>
@@ -257,7 +351,19 @@ export function AdminDashboard() {
                 </div>
                 <div className="text-sm text-gray-600 mb-4 bg-gray-50 p-3 rounded-xl border border-gray-100">
                   <p className="mb-1"><strong>Time:</strong> {order.date ? `${order.date} at ${order.slotTime}` : (order.dateTime ? format(new Date(order.dateTime), 'PP p') : 'N/A')}</p>
-                  {order.staffName && <p className="mb-1"><strong>Staff:</strong> {order.staffName}</p>}
+                  <div className="mb-2 flex items-center gap-2">
+                    <strong>Staff:</strong>
+                    <select
+                      value={staffList.find(s => s.userId === order.staffId)?.id || ''}
+                      onChange={(e) => assignStaff(order.id, e.target.value)}
+                      className="px-2 py-1 rounded-lg border border-gray-200 text-sm outline-none bg-white"
+                    >
+                      <option value="">Unassigned</option>
+                      {staffList.map(s => (
+                        <option key={s.id} value={s.id}>{s.name} {s.available ? '(Online)' : '(Offline)'}</option>
+                      ))}
+                    </select>
+                  </div>
                   {order.couponCode && <p className="mb-1 text-emerald-600"><strong>Coupon:</strong> {order.couponCode} (-₹{order.discount})</p>}
                   <p className="mb-1"><strong>Address:</strong> {order.address}</p>
                   <p className="truncate"><strong>Location:</strong> {order.location}</p>
@@ -354,11 +460,25 @@ export function AdminDashboard() {
                     <p className="text-xs text-gray-500">{u.email}</p>
                   </div>
                 </div>
-                <span className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wider ${
-                  u.role === 'admin' ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-600'
-                }`}>
-                  {u.role}
-                </span>
+                <div className="flex items-center gap-3">
+                  <span className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wider ${
+                    u.role === 'admin' ? 'bg-amber-100 text-amber-800' : 
+                    u.role === 'staff' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    {u.role}
+                  </span>
+                  {u.role === 'user' && (
+                    <button
+                      onClick={() => {
+                        setUserToStaff(u);
+                        setStaffForm({ name: u.name || '', phone: '', experience: '1 Year', gender: 'Male' });
+                      }}
+                      className="text-xs bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg font-bold hover:bg-emerald-100 transition-colors"
+                    >
+                      Become Staff
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </motion.div>
@@ -482,6 +602,87 @@ export function AdminDashboard() {
                 className="flex-1 px-4 py-2.5 rounded-xl bg-emerald-900 text-white font-bold hover:bg-emerald-800 transition-colors"
               >
                 Save Changes
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+      {userToStaff && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white w-full max-w-md rounded-3xl overflow-hidden shadow-2xl p-6"
+          >
+            <h3 className="text-xl font-bold text-gray-900 mb-4">Become a Staff</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email (Auto-filled)</label>
+                <input
+                  type="text"
+                  value={userToStaff.email}
+                  disabled
+                  className="w-full px-4 py-2 rounded-xl border border-gray-200 bg-gray-50 text-gray-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                <input
+                  type="text"
+                  value={staffForm.name}
+                  onChange={(e) => setStaffForm({ ...staffForm, name: e.target.value })}
+                  className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-900 outline-none"
+                  placeholder="Enter full name"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Mobile Number</label>
+                <input
+                  type="text"
+                  value={staffForm.phone}
+                  onChange={(e) => setStaffForm({ ...staffForm, phone: e.target.value })}
+                  className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-900 outline-none"
+                  placeholder="Enter mobile number"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Experience</label>
+                <select
+                  value={staffForm.experience}
+                  onChange={(e) => setStaffForm({ ...staffForm, experience: e.target.value })}
+                  className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-900 outline-none bg-white"
+                >
+                  <option value="Fresher">Fresher</option>
+                  <option value="1 Year">1 Year</option>
+                  <option value="2 Years">2 Years</option>
+                  <option value="3+ Years">3+ Years</option>
+                  <option value="5+ Years">5+ Years</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
+                <select
+                  value={staffForm.gender}
+                  onChange={(e) => setStaffForm({ ...staffForm, gender: e.target.value })}
+                  className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-900 outline-none bg-white"
+                >
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setUserToStaff(null)}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 font-bold hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConvertToStaff}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-emerald-900 text-white font-bold hover:bg-emerald-800 transition-colors"
+              >
+                Save & Convert
               </button>
             </div>
           </motion.div>

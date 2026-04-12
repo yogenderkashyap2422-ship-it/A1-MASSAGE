@@ -1,7 +1,7 @@
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
-export function ProtectedRoute({ requireAdmin = false }: { requireAdmin?: boolean }) {
+export function ProtectedRoute({ requireAdmin = false, requireStaff = false }: { requireAdmin?: boolean, requireStaff?: boolean }) {
   const { user, loading } = useAuth();
 
   if (loading) {
@@ -13,6 +13,10 @@ export function ProtectedRoute({ requireAdmin = false }: { requireAdmin?: boolea
   }
 
   if (requireAdmin && user.role !== 'admin') {
+    return <Navigate to="/" replace />;
+  }
+
+  if (requireStaff && user.role !== 'staff' && user.role !== 'admin') {
     return <Navigate to="/" replace />;
   }
 

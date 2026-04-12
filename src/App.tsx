@@ -14,6 +14,7 @@ import { Services } from './pages/Services';
 import { Orders } from './pages/Orders';
 import { Profile } from './pages/Profile';
 import { AdminDashboard } from './pages/AdminDashboard';
+import StaffDashboard from './pages/StaffDashboard';
 import { About } from './pages/About';
 import { Contact } from './pages/Contact';
 import { PrivacyPolicy } from './pages/PrivacyPolicy';
@@ -43,6 +44,11 @@ export default function App() {
               {/* Admin Routes */}
               <Route element={<ProtectedRoute requireAdmin={true} />}>
                 <Route path="/admin" element={<AdminDashboard />} />
+              </Route>
+
+              {/* Staff Routes */}
+              <Route element={<ProtectedRoute requireStaff={true} />}>
+                <Route path="/staff" element={<StaffDashboard />} />
               </Route>
             </Route>
           </Route>
