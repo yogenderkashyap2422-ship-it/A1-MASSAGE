@@ -78,6 +78,14 @@ export default function StaffDashboard() {
 
       await updateDoc(doc(db, 'orders', orderId), updateData);
       toast.success(newStatus === 'Pending' ? 'Order Rejected' : `Status updated to ${newStatus}`);
+
+      // Notify customer
+      const order = orders.find(o => o.id === orderId);
+      if (order && order.phone && newStatus !== 'Pending') {
+        const message = `Hello! Your SpaHome order (${orderId}) status is now: ${newStatus}.`;
+        const url = `https://wa.me/${order.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`;
+        window.open(url, '_blank');
+      }
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `orders/${orderId}`);
       toast.error('Failed to update status');
