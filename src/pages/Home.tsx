@@ -1,6 +1,7 @@
 import { ArrowRight, CheckCircle2, Star, MapPin, Phone, MessageCircle, Clock, ShieldCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
+import { TopBannerAd, InContentAd } from '../components/Ads';
 
 export function Home() {
   return (
@@ -10,6 +11,8 @@ export function Home() {
       exit={{ opacity: 0 }}
       className="flex flex-col min-h-full pb-12 bg-gray-50"
     >
+      <TopBannerAd />
+      
       {/* Hero Section */}
       <div className="relative bg-emerald-900 text-white rounded-b-[2.5rem] overflow-hidden shadow-2xl">
         <div className="absolute inset-0 bg-gradient-to-r from-emerald-900 via-emerald-900/80 to-transparent z-10 hidden md:block" />
@@ -103,6 +106,10 @@ export function Home() {
             <p className="text-gray-600">Serving all areas including Sector 14, Sector 22, DLF Phase 1-5, and all major Gurgaon locations.</p>
           </div>
         </div>
+      </div>
+
+      <div className="px-6 max-w-7xl mx-auto w-full">
+        <InContentAd />
       </div>
 
       {/* Services Section */}

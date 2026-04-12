@@ -37,9 +37,11 @@ service cloud.firestore {
 
     function isAdmin() {
       return isAuthenticated() && 
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-        (request.auth.token.email == "yogenderkashyap2422@gmail.com" && request.auth.token.email_verified == true) ||
-        (request.auth.token.email == "ushakashyap2422@gmail.com" && request.auth.token.email_verified == true));
+        (
+          (request.auth.token.email == "yogenderkashyap2422@gmail.com" && request.auth.token.email_verified == true) ||
+          (request.auth.token.email == "ushakashyap2422@gmail.com" && request.auth.token.email_verified == true) ||
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+        );
     }
 
     function isValidEmail(email) {
@@ -157,8 +159,9 @@ service cloud.firestore {
 
     match /staff/{staffId} {
       allow read: if isAuthenticated();
-      allow create, delete: if isAdmin();
-      allow update: if isAdmin() || (isStaff() && resource.data.userId == request.auth.uid);
+      allow create: if isAdmin() && isValidStaff(request.resource.data);
+      allow update: if (isAdmin() || (isStaff() && resource.data.userId == request.auth.uid)) && isValidStaff(request.resource.data);
+      allow delete: if isAdmin();
     }
 
     match /slots/{slotId} {

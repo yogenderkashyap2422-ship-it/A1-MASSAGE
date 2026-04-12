@@ -3,7 +3,7 @@ import { BottomNav } from './BottomNav';
 import { useAuth } from '../contexts/AuthContext';
 import { LoginModal } from './LoginModal';
 import { InstallPWA } from './InstallPWA';
-import { AdBanner } from './AdBanner';
+import { BottomBannerAd } from './Ads';
 import { User as UserIcon } from 'lucide-react';
 
 export function Layout() {
@@ -39,7 +39,7 @@ export function Layout() {
         </header>
 
         <Outlet />
-        <AdBanner />
+        <BottomBannerAd />
       </main>
       <BottomNav />
       <LoginModal isOpen={isLoginModalOpen} onClose={closeLoginModal} />
