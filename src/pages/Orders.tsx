@@ -2,17 +2,29 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
-import { Clock, CheckCircle2, Package, MapPin } from 'lucide-react';
-import { format } from 'date-fns';
-import { motion } from 'motion/react';
+import { Clock, CheckCircle2, Package, MapPin, FileText, RefreshCw, Star, X, Download } from 'lucide-react';
+import { format, differenceInMinutes, differenceInSeconds } from 'date-fns';
+import { motion, AnimatePresence } from 'motion/react';
+import { useNavigate } from 'react-router-dom';
 
 interface Order {
   id: string;
   serviceType: string;
-  dateTime: string;
-  status: 'Pending' | 'Accepted' | 'Done';
+  dateTime?: string;
+  date?: string;
+  slotTime?: string;
+  status: 'Pending' | 'Accepted' | 'On the way' | 'In Progress' | 'Done' | 'Cancelled';
   price: number;
+  finalPrice?: number;
   address: string;
+  location?: string;
+  latitude?: number;
+  longitude?: number;
+  staffLocationLat?: number;
+  staffLocationLng?: number;
+  trackingEnabled?: boolean;
+  serviceStartTime?: string;
+  serviceEndTime?: string;
   createdAt: any;
 }
 
@@ -68,12 +80,18 @@ export function Orders() {
     );
   }
 
+  const navigate = useNavigate();
+  const [selectedInvoice, setSelectedInvoice] = useState<Order | null>(null);
+
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'Pending': return 'bg-amber-100 text-amber-700';
-      case 'Accepted': return 'bg-blue-100 text-blue-700';
-      case 'Done': return 'bg-emerald-100 text-emerald-700';
-      default: return 'bg-gray-100 text-gray-700';
+      case 'Pending': return 'bg-amber-100 text-amber-700 border-amber-200';
+      case 'Accepted': return 'bg-blue-100 text-blue-700 border-blue-200';
+      case 'On the way': return 'bg-indigo-100 text-indigo-700 border-indigo-200';
+      case 'In Progress': return 'bg-purple-100 text-purple-700 border-purple-200';
+      case 'Done': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+      case 'Cancelled': return 'bg-red-100 text-red-700 border-red-200';
+      default: return 'bg-gray-100 text-gray-700 border-gray-200';
     }
   };
 
@@ -81,9 +99,46 @@ export function Orders() {
     switch (status) {
       case 'Pending': return <Clock className="w-4 h-4" />;
       case 'Accepted': return <Package className="w-4 h-4" />;
+      case 'On the way': return <MapPin className="w-4 h-4" />;
+      case 'In Progress': return <RefreshCw className="w-4 h-4 animate-spin" />;
       case 'Done': return <CheckCircle2 className="w-4 h-4" />;
+      case 'Cancelled': return <X className="w-4 h-4" />;
       default: return null;
     }
+  };
+
+  const getStatusProgress = (status: string) => {
+    switch (status) {
+      case 'Pending': return 25;
+      case 'Accepted': return 50;
+      case 'On the way': return 75;
+      case 'In Progress': return 90;
+      case 'Done': return 100;
+      case 'Cancelled': return 0;
+      default: return 0;
+    }
+  };
+
+  const Timer = ({ startTime }: { startTime: string }) => {
+    const [duration, setDuration] = useState('');
+
+    useEffect(() => {
+      const updateTimer = () => {
+        const start = new Date(startTime);
+        const now = new Date();
+        const diffInSeconds = differenceInSeconds(now, start);
+        const hours = Math.floor(diffInSeconds / 3600);
+        const minutes = Math.floor((diffInSeconds % 3600) / 60);
+        const seconds = diffInSeconds % 60;
+        setDuration(`${hours > 0 ? `${hours}h ` : ''}${minutes}m ${seconds}s`);
+      };
+
+      updateTimer();
+      const interval = setInterval(updateTimer, 1000);
+      return () => clearInterval(interval);
+    }, [startTime]);
+
+    return <span className="font-mono font-bold text-purple-700">{duration}</span>;
   };
 
   return (
@@ -127,12 +182,34 @@ export function Orders() {
                     {order.date ? `${order.date} at ${order.slotTime}` : (order.dateTime ? format(new Date(order.dateTime), 'MMM dd, yyyy - h:mm a') : 'No date')}
                   </p>
                 </div>
-                <div className={`px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1.5 ${getStatusColor(order.status)}`}>
+                <div className={`px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1.5 border ${getStatusColor(order.status)}`}>
                   {getStatusIcon(order.status)}
                   {order.status}
                 </div>
               </div>
-              
+
+              {/* Progress Bar */}
+              <div className="mb-4">
+                <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
+                  <motion.div 
+                    initial={{ width: 0 }}
+                    animate={{ width: `${getStatusProgress(order.status)}%` }}
+                    className={`h-full ${order.status === 'Cancelled' ? 'bg-red-500' : 'bg-emerald-500'}`}
+                  />
+                </div>
+              </div>
+
+              {/* Service Timer */}
+              {order.status === 'In Progress' && order.serviceStartTime && (
+                <div className="mb-4 p-3 bg-purple-50 rounded-xl border border-purple-100 flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-purple-900">
+                    <Clock className="w-4 h-4" />
+                    <span className="text-sm font-medium">Service in progress</span>
+                  </div>
+                  <Timer startTime={order.serviceStartTime} />
+                </div>
+              )}
+
               <div className="pt-4 border-t border-gray-50 flex justify-between items-center">
                 <div className="text-sm text-gray-600 truncate pr-4">
                   {order.address}
@@ -142,27 +219,149 @@ export function Orders() {
                 </div>
               </div>
               
-              <div className="pt-4 mt-2 border-t border-gray-50">
-                <button
-                  onClick={() => {
-                    if (order.staffLocationLat && order.staffLocationLng) {
-                      window.open(`https://www.google.com/maps?q=${order.staffLocationLat},${order.staffLocationLng}`, '_blank');
-                    } else if (order.latitude && order.longitude) {
-                      window.open(`https://www.google.com/maps?q=${order.latitude},${order.longitude}`, '_blank');
-                    } else {
-                      window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.location || order.address)}`, '_blank');
-                    }
-                  }}
-                  className="w-full bg-blue-50 text-blue-700 py-2 rounded-xl text-sm font-bold hover:bg-blue-100 transition-colors flex items-center justify-center gap-2"
-                >
-                  <MapPin className="w-4 h-4" />
-                  Track Service
-                </button>
+              <div className="pt-4 mt-2 border-t border-gray-50 flex flex-col gap-2">
+                {['Accepted', 'On the way', 'In Progress'].includes(order.status) && order.trackingEnabled !== false && (
+                  <button
+                    onClick={() => {
+                      if (order.staffLocationLat && order.staffLocationLng) {
+                        window.open(`https://www.google.com/maps?q=${order.staffLocationLat},${order.staffLocationLng}`, '_blank');
+                      } else if (order.latitude && order.longitude) {
+                        window.open(`https://www.google.com/maps?q=${order.latitude},${order.longitude}`, '_blank');
+                      } else {
+                        window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.location || order.address)}`, '_blank');
+                      }
+                    }}
+                    className="w-full bg-blue-50 text-blue-700 py-2.5 rounded-xl text-sm font-bold hover:bg-blue-100 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <MapPin className="w-4 h-4" />
+                    Track Service
+                  </button>
+                )}
+
+                {['Accepted', 'On the way', 'In Progress'].includes(order.status) && order.trackingEnabled === false && (
+                  <div className="text-center text-xs text-gray-500 py-2 bg-gray-50 rounded-xl">
+                    Tracking available only during active service
+                  </div>
+                )}
+
+                {order.status === 'Done' && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setSelectedInvoice(order)}
+                      className="flex-1 bg-gray-50 text-gray-700 py-2.5 rounded-xl text-sm font-bold hover:bg-gray-100 transition-colors flex items-center justify-center gap-2 border border-gray-200"
+                    >
+                      <FileText className="w-4 h-4" />
+                      Invoice
+                    </button>
+                    <button
+                      onClick={() => navigate('/services')}
+                      className="flex-1 bg-emerald-50 text-emerald-700 py-2.5 rounded-xl text-sm font-bold hover:bg-emerald-100 transition-colors flex items-center justify-center gap-2 border border-emerald-200"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      Book Again
+                    </button>
+                  </div>
+                )}
               </div>
             </motion.div>
           ))
         )}
       </div>
+
+      {/* Smart Recommendations */}
+      {orders.length > 0 && (
+        <div className="px-6 pb-8">
+          <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+            <Star className="w-5 h-5 text-amber-500" />
+            Customers also booked
+          </h3>
+          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex items-center justify-between">
+            <div>
+              <h4 className="font-bold text-gray-900">Premium Spa Package</h4>
+              <p className="text-sm text-gray-500">Relaxing 90-min session</p>
+            </div>
+            <button
+              onClick={() => navigate('/services')}
+              className="px-4 py-2 bg-emerald-50 text-emerald-700 font-bold rounded-xl text-sm hover:bg-emerald-100 transition-colors"
+            >
+              View
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Invoice Modal */}
+      <AnimatePresence>
+        {selectedInvoice && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white w-full max-w-md rounded-3xl overflow-hidden shadow-2xl"
+            >
+              <div className="p-6 bg-emerald-900 text-white flex justify-between items-center">
+                <h2 className="text-xl font-bold">Digital Invoice</h2>
+                <button onClick={() => setSelectedInvoice(null)} className="p-2 hover:bg-emerald-800 rounded-full transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="text-center pb-4 border-b border-gray-100">
+                  <h3 className="font-bold text-xl text-gray-900">SpaHome Services</h3>
+                  <p className="text-sm text-gray-500">Order #{selectedInvoice.id.slice(0, 8).toUpperCase()}</p>
+                </div>
+                
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Date</span>
+                    <span className="font-medium text-gray-900">
+                      {selectedInvoice.date ? `${selectedInvoice.date}` : (selectedInvoice.dateTime ? format(new Date(selectedInvoice.dateTime), 'MMM dd, yyyy') : 'N/A')}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Service</span>
+                    <span className="font-medium text-gray-900">{selectedInvoice.serviceType}</span>
+                  </div>
+                  {selectedInvoice.staffName && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Professional</span>
+                      <span className="font-medium text-gray-900">{selectedInvoice.staffName}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-4 border-t border-gray-100 space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Subtotal</span>
+                    <span className="font-medium text-gray-900">₹{selectedInvoice.price}</span>
+                  </div>
+                  {selectedInvoice.discount && selectedInvoice.discount > 0 && (
+                    <div className="flex justify-between text-emerald-600">
+                      <span>Discount ({selectedInvoice.couponCode})</span>
+                      <span>-₹{selectedInvoice.discount}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-lg font-bold pt-2 border-t border-gray-100">
+                    <span className="text-gray-900">Total</span>
+                    <span className="text-emerald-900">₹{selectedInvoice.finalPrice || selectedInvoice.price}</span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => {
+                    window.print();
+                  }}
+                  className="w-full mt-6 bg-emerald-900 text-white py-3 rounded-xl font-bold hover:bg-emerald-800 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Download className="w-5 h-5" />
+                  Download / Print
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

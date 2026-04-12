@@ -33,11 +33,29 @@ export function AdminDashboard() {
 
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
     try {
-      await updateDoc(doc(db, 'orders', orderId), { status: newStatus });
+      const updateData: any = { status: newStatus };
+      if (newStatus === 'In Progress') {
+        updateData.serviceStartTime = new Date().toISOString();
+      } else if (newStatus === 'Done') {
+        updateData.serviceEndTime = new Date().toISOString();
+        updateData.trackingEnabled = false;
+      } else if (newStatus === 'Cancelled') {
+        updateData.trackingEnabled = false;
+      }
+      await updateDoc(doc(db, 'orders', orderId), updateData);
       toast.success(`Order marked as ${newStatus}`);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `orders/${orderId}`);
       toast.error('Failed to update status');
+    }
+  };
+
+  const toggleTracking = async (orderId: string, currentStatus: boolean) => {
+    try {
+      await updateDoc(doc(db, 'orders', orderId), { trackingEnabled: !currentStatus });
+      toast.success(`Tracking ${!currentStatus ? 'enabled' : 'disabled'}`);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `orders/${orderId}`);
     }
   };
 
@@ -146,10 +164,13 @@ export function AdminDashboard() {
                     <p className="text-sm text-gray-500">{order.name} • {order.phone}</p>
                     <p className="text-sm font-bold text-emerald-900 mt-1">₹{order.finalPrice || order.price}</p>
                   </div>
-                  <span className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wider ${
-                    order.status === 'Pending' ? 'bg-amber-100 text-amber-700' :
-                    order.status === 'Accepted' ? 'bg-blue-100 text-blue-700' :
-                    'bg-emerald-100 text-emerald-700'
+                  <span className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wider border ${
+                    order.status === 'Pending' ? 'bg-amber-100 text-amber-700 border-amber-200' :
+                    order.status === 'Accepted' ? 'bg-blue-100 text-blue-700 border-blue-200' :
+                    order.status === 'On the way' ? 'bg-indigo-100 text-indigo-700 border-indigo-200' :
+                    order.status === 'In Progress' ? 'bg-purple-100 text-purple-700 border-purple-200' :
+                    order.status === 'Cancelled' ? 'bg-red-100 text-red-700 border-red-200' :
+                    'bg-emerald-100 text-emerald-700 border-emerald-200'
                   }`}>
                     {order.status}
                   </span>
@@ -160,6 +181,21 @@ export function AdminDashboard() {
                   {order.couponCode && <p className="mb-1 text-emerald-600"><strong>Coupon:</strong> {order.couponCode} (-₹{order.discount})</p>}
                   <p className="mb-1"><strong>Address:</strong> {order.address}</p>
                   <p className="truncate"><strong>Location:</strong> {order.location}</p>
+                  {['Accepted', 'On the way', 'In Progress'].includes(order.status) && (
+                    <div className="mt-2 pt-2 border-t border-gray-200 flex items-center justify-between">
+                      <span className="font-medium text-gray-700">Live Tracking:</span>
+                      <button
+                        onClick={() => toggleTracking(order.id, order.trackingEnabled !== false)}
+                        className={`px-3 py-1 rounded-full text-xs font-bold transition-colors ${
+                          order.trackingEnabled !== false
+                            ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        }`}
+                      >
+                        {order.trackingEnabled !== false ? 'Enabled' : 'Disabled'}
+                      </button>
+                    </div>
+                  )}
                 </div>
                 
                 <div className="flex gap-2 mb-4">
@@ -201,21 +237,45 @@ export function AdminDashboard() {
                   </button>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   {order.status === 'Pending' && (
-                    <button 
-                      onClick={() => updateOrderStatus(order.id, 'Accepted')}
-                      className="flex-1 bg-emerald-900 text-white py-2.5 rounded-xl text-sm font-bold hover:bg-emerald-800 transition-colors shadow-sm"
-                    >
-                      Accept Order
-                    </button>
+                    <>
+                      <button 
+                        onClick={() => updateOrderStatus(order.id, 'Accepted')}
+                        className="col-span-2 bg-emerald-900 text-white py-2.5 rounded-xl text-sm font-bold hover:bg-emerald-800 transition-colors shadow-sm"
+                      >
+                        Accept Order
+                      </button>
+                      <button 
+                        onClick={() => updateOrderStatus(order.id, 'Cancelled')}
+                        className="col-span-2 bg-red-50 text-red-700 py-2.5 rounded-xl text-sm font-bold hover:bg-red-100 transition-colors shadow-sm"
+                      >
+                        Cancel Order
+                      </button>
+                    </>
                   )}
                   {order.status === 'Accepted' && (
                     <button 
-                      onClick={() => updateOrderStatus(order.id, 'Done')}
-                      className="flex-1 bg-emerald-600 text-white py-2.5 rounded-xl text-sm font-bold hover:bg-emerald-500 transition-colors shadow-sm"
+                      onClick={() => updateOrderStatus(order.id, 'On the way')}
+                      className="col-span-2 bg-indigo-600 text-white py-2.5 rounded-xl text-sm font-bold hover:bg-indigo-500 transition-colors shadow-sm"
                     >
-                      Mark as Done
+                      Mark On the way
+                    </button>
+                  )}
+                  {order.status === 'On the way' && (
+                    <button 
+                      onClick={() => updateOrderStatus(order.id, 'In Progress')}
+                      className="col-span-2 bg-purple-600 text-white py-2.5 rounded-xl text-sm font-bold hover:bg-purple-500 transition-colors shadow-sm"
+                    >
+                      Start Service
+                    </button>
+                  )}
+                  {order.status === 'In Progress' && (
+                    <button 
+                      onClick={() => updateOrderStatus(order.id, 'Done')}
+                      className="col-span-2 bg-emerald-600 text-white py-2.5 rounded-xl text-sm font-bold hover:bg-emerald-500 transition-colors shadow-sm"
+                    >
+                      Finish Service
                     </button>
                   )}
                 </div>

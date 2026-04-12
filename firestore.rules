@@ -59,7 +59,7 @@ service cloud.firestore {
     }
 
     function isValidOrder(data) {
-      return hasOnlyAllowedFields(['userId', 'name', 'phone', 'dateTime', 'date', 'slotTime', 'address', 'location', 'serviceType', 'status', 'price', 'finalPrice', 'couponCode', 'discount', 'staffId', 'staffName', 'staffLocationLat', 'staffLocationLng', 'createdAt', 'latitude', 'longitude']) &&
+      return hasOnlyAllowedFields(['userId', 'name', 'phone', 'dateTime', 'date', 'slotTime', 'address', 'location', 'serviceType', 'status', 'price', 'finalPrice', 'couponCode', 'discount', 'staffId', 'staffName', 'staffLocationLat', 'staffLocationLng', 'createdAt', 'latitude', 'longitude', 'trackingEnabled', 'serviceStartTime', 'serviceEndTime']) &&
              data.userId is string && data.userId.size() > 0 &&
              data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
              data.phone is string && data.phone.size() > 0 && data.phone.size() <= 50 &&
@@ -73,13 +73,16 @@ service cloud.firestore {
              (!('staffLocationLat' in data) || data.staffLocationLat is number) &&
              (!('staffLocationLng' in data) || data.staffLocationLng is number) &&
              data.serviceType in ['Ladies Body Massage', 'Gents Body Massage'] &&
-             data.status in ['Pending', 'Accepted', 'Done'] &&
+             data.status in ['Pending', 'Accepted', 'On the way', 'In Progress', 'Done', 'Cancelled'] &&
              data.price is number && data.price > 0 &&
-             (!('finalPrice' in data) || data.finalPrice is number) &&
-             (!('couponCode' in data) || data.couponCode is string) &&
-             (!('discount' in data) || data.discount is number) &&
-             (!('staffId' in data) || data.staffId is string) &&
-             (!('staffName' in data) || data.staffName is string) &&
+             (!('finalPrice' in data) || data.finalPrice == null || data.finalPrice is number) &&
+             (!('couponCode' in data) || data.couponCode == null || data.couponCode is string) &&
+             (!('discount' in data) || data.discount == null || data.discount is number) &&
+             (!('staffId' in data) || data.staffId == null || data.staffId is string) &&
+             (!('staffName' in data) || data.staffName == null || data.staffName is string) &&
+             (!('trackingEnabled' in data) || data.trackingEnabled is bool) &&
+             (!('serviceStartTime' in data) || data.serviceStartTime == null || data.serviceStartTime is string) &&
+             (!('serviceEndTime' in data) || data.serviceEndTime == null || data.serviceEndTime is string) &&
              data.createdAt is timestamp;
     }
 
@@ -97,7 +100,7 @@ service cloud.firestore {
              data.name is string && data.name.size() > 0 &&
              data.gender in ['Male', 'Female'] &&
              data.experience is string &&
-             (!('photoURL' in data) || data.photoURL is string) &&
+             (!('photoURL' in data) || data.photoURL == null || data.photoURL is string) &&
              data.available is bool;
     }
 
