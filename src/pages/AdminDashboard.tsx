@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, orderBy, doc, updateDoc } from 'firebase/firestore';
-import { Users, Package, Clock, CheckCircle2, MapPin, Copy, MessageCircle } from 'lucide-react';
+import { Users, Package, Clock, CheckCircle2, MapPin, Copy, MessageCircle, Trash2, Edit } from 'lucide-react';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 import { motion } from 'motion/react';
@@ -13,6 +13,10 @@ export function AdminDashboard() {
   const [orders, setOrders] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'reports' | 'orders' | 'users' | 'staff' | 'coupons' | 'slots'>('reports');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('All');
+  const [orderToDelete, setOrderToDelete] = useState<string | null>(null);
+  const [orderToEdit, setOrderToEdit] = useState<any | null>(null);
 
   useEffect(() => {
     const qOrders = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
@@ -34,19 +38,46 @@ export function AdminDashboard() {
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
     try {
       const updateData: any = { status: newStatus };
-      if (newStatus === 'In Progress') {
-        updateData.serviceStartTime = new Date().toISOString();
+      const now = new Date().toISOString();
+      
+      if (newStatus === 'Accepted') {
+        updateData.acceptedAt = now;
+      } else if (newStatus === 'On the way') {
+        updateData.onTheWayAt = now;
+      } else if (newStatus === 'In Progress') {
+        updateData.serviceStartTime = now;
+        updateData.inProgressAt = now;
       } else if (newStatus === 'Done') {
-        updateData.serviceEndTime = new Date().toISOString();
+        updateData.serviceEndTime = now;
+        updateData.doneAt = now;
         updateData.trackingEnabled = false;
       } else if (newStatus === 'Cancelled') {
+        updateData.cancelledAt = now;
         updateData.trackingEnabled = false;
       }
       await updateDoc(doc(db, 'orders', orderId), updateData);
       toast.success(`Order marked as ${newStatus}`);
+      
+      // Notify customer
+      const order = orders.find(o => o.id === orderId);
+      if (order && order.phone) {
+        sendWhatsApp(order.phone, order.id, newStatus);
+      }
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `orders/${orderId}`);
       toast.error('Failed to update status');
+    }
+  };
+
+  const softDeleteOrder = async () => {
+    if (!orderToDelete) return;
+    try {
+      await updateDoc(doc(db, 'orders', orderToDelete), { deleted: true });
+      toast.success('Order moved to trash');
+      setOrderToDelete(null);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `orders/${orderToDelete}`);
+      toast.error('Failed to delete order');
     }
   };
 
@@ -82,10 +113,25 @@ export function AdminDashboard() {
   };
 
   const reports = {
-    total: orders.length,
-    pending: orders.filter(o => o.status === 'Pending').length,
-    completed: orders.filter(o => o.status === 'Done').length,
+    total: orders.filter(o => !o.deleted).length,
+    pending: orders.filter(o => !o.deleted && o.status === 'Pending').length,
+    completed: orders.filter(o => !o.deleted && o.status === 'Done').length,
   };
+
+  const filteredOrders = orders.filter(order => {
+    if (order.deleted) return false;
+    if (statusFilter !== 'All' && order.status !== statusFilter) return false;
+    
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      const nameMatch = order.name?.toLowerCase().includes(query);
+      const phoneMatch = order.phone?.includes(query);
+      const dateMatch = order.date?.includes(query) || order.dateTime?.includes(query);
+      return nameMatch || phoneMatch || dateMatch;
+    }
+    
+    return true;
+  });
 
   return (
     <motion.div 
@@ -156,7 +202,30 @@ export function AdminDashboard() {
             animate={{ opacity: 1 }}
             className="space-y-4"
           >
-            {orders.map(order => (
+            <div className="flex flex-col sm:flex-row gap-3 mb-6">
+              <input
+                type="text"
+                placeholder="Search by name, phone, or date..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-900 focus:border-transparent outline-none"
+              />
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-900 focus:border-transparent outline-none bg-white"
+              >
+                <option value="All">All Statuses</option>
+                <option value="Pending">Pending</option>
+                <option value="Accepted">Accepted</option>
+                <option value="On the way">On the way</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Done">Done</option>
+                <option value="Cancelled">Cancelled</option>
+              </select>
+            </div>
+
+            {filteredOrders.map(order => (
               <div key={order.id} className="bg-white p-5 rounded-2xl shadow-md border border-gray-100">
                 <div className="flex justify-between items-start mb-3">
                   <div>
@@ -164,16 +233,27 @@ export function AdminDashboard() {
                     <p className="text-sm text-gray-500">{order.name} • {order.phone}</p>
                     <p className="text-sm font-bold text-emerald-900 mt-1">₹{order.finalPrice || order.price}</p>
                   </div>
-                  <span className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wider border ${
-                    order.status === 'Pending' ? 'bg-amber-100 text-amber-700 border-amber-200' :
-                    order.status === 'Accepted' ? 'bg-blue-100 text-blue-700 border-blue-200' :
-                    order.status === 'On the way' ? 'bg-indigo-100 text-indigo-700 border-indigo-200' :
-                    order.status === 'In Progress' ? 'bg-purple-100 text-purple-700 border-purple-200' :
-                    order.status === 'Cancelled' ? 'bg-red-100 text-red-700 border-red-200' :
-                    'bg-emerald-100 text-emerald-700 border-emerald-200'
-                  }`}>
-                    {order.status}
-                  </span>
+                  <div className="flex flex-col items-end gap-2">
+                    <select
+                      value={order.status}
+                      onChange={(e) => updateOrderStatus(order.id, e.target.value)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold uppercase tracking-wider border outline-none cursor-pointer ${
+                        order.status === 'Pending' ? 'bg-amber-100 text-amber-700 border-amber-200' :
+                        order.status === 'Accepted' ? 'bg-blue-100 text-blue-700 border-blue-200' :
+                        order.status === 'On the way' ? 'bg-indigo-100 text-indigo-700 border-indigo-200' :
+                        order.status === 'In Progress' ? 'bg-purple-100 text-purple-700 border-purple-200' :
+                        order.status === 'Cancelled' ? 'bg-red-100 text-red-700 border-red-200' :
+                        'bg-emerald-100 text-emerald-700 border-emerald-200'
+                      }`}
+                    >
+                      <option value="Pending">Pending</option>
+                      <option value="Accepted">Accepted</option>
+                      <option value="On the way">On the way</option>
+                      <option value="In Progress">In Progress</option>
+                      <option value="Done">Done</option>
+                      <option value="Cancelled">Cancelled</option>
+                    </select>
+                  </div>
                 </div>
                 <div className="text-sm text-gray-600 mb-4 bg-gray-50 p-3 rounded-xl border border-gray-100">
                   <p className="mb-1"><strong>Time:</strong> {order.date ? `${order.date} at ${order.slotTime}` : (order.dateTime ? format(new Date(order.dateTime), 'PP p') : 'N/A')}</p>
@@ -214,9 +294,17 @@ export function AdminDashboard() {
                   </button>
                   <button
                     onClick={() => updateOrderLocation(order.id)}
-                    className="flex-1 flex items-center justify-center gap-2 bg-purple-50 text-purple-700 py-2 rounded-xl text-sm font-bold hover:bg-purple-100 transition-colors"
+                    className="flex items-center justify-center p-2 bg-purple-50 text-purple-700 rounded-xl hover:bg-purple-100 transition-colors border border-purple-200"
+                    title="Update Location"
                   >
-                    Update Loc
+                    <MapPin className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setOrderToEdit(order)}
+                    className="flex items-center justify-center p-2 bg-amber-50 text-amber-700 rounded-xl hover:bg-amber-100 transition-colors border border-amber-200"
+                    title="Edit Order"
+                  >
+                    <Edit className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => sendWhatsApp(order.phone, order.id, order.status)}
@@ -235,53 +323,17 @@ export function AdminDashboard() {
                   >
                     <Copy className="w-4 h-4" />
                   </button>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  {order.status === 'Pending' && (
-                    <>
-                      <button 
-                        onClick={() => updateOrderStatus(order.id, 'Accepted')}
-                        className="col-span-2 bg-emerald-900 text-white py-2.5 rounded-xl text-sm font-bold hover:bg-emerald-800 transition-colors shadow-sm"
-                      >
-                        Accept Order
-                      </button>
-                      <button 
-                        onClick={() => updateOrderStatus(order.id, 'Cancelled')}
-                        className="col-span-2 bg-red-50 text-red-700 py-2.5 rounded-xl text-sm font-bold hover:bg-red-100 transition-colors shadow-sm"
-                      >
-                        Cancel Order
-                      </button>
-                    </>
-                  )}
-                  {order.status === 'Accepted' && (
-                    <button 
-                      onClick={() => updateOrderStatus(order.id, 'On the way')}
-                      className="col-span-2 bg-indigo-600 text-white py-2.5 rounded-xl text-sm font-bold hover:bg-indigo-500 transition-colors shadow-sm"
-                    >
-                      Mark On the way
-                    </button>
-                  )}
-                  {order.status === 'On the way' && (
-                    <button 
-                      onClick={() => updateOrderStatus(order.id, 'In Progress')}
-                      className="col-span-2 bg-purple-600 text-white py-2.5 rounded-xl text-sm font-bold hover:bg-purple-500 transition-colors shadow-sm"
-                    >
-                      Start Service
-                    </button>
-                  )}
-                  {order.status === 'In Progress' && (
-                    <button 
-                      onClick={() => updateOrderStatus(order.id, 'Done')}
-                      className="col-span-2 bg-emerald-600 text-white py-2.5 rounded-xl text-sm font-bold hover:bg-emerald-500 transition-colors shadow-sm"
-                    >
-                      Finish Service
-                    </button>
-                  )}
+                  <button
+                    onClick={() => setOrderToDelete(order.id)}
+                    className="flex items-center justify-center p-2 bg-red-50 text-red-700 rounded-xl hover:bg-red-100 transition-colors border border-red-200"
+                    title="Delete Order"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             ))}
-            {orders.length === 0 && <p className="text-center text-gray-500 py-10">No orders found.</p>}
+            {filteredOrders.length === 0 && <p className="text-center text-gray-500 py-10">No orders found.</p>}
           </motion.div>
         )}
 
@@ -330,6 +382,111 @@ export function AdminDashboard() {
           </motion.div>
         )}
       </div>
+
+      {orderToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl p-6"
+          >
+            <h3 className="text-xl font-bold text-gray-900 mb-2">Delete Order?</h3>
+            <p className="text-gray-600 mb-6">Are you sure you want to move this order to trash? This action can be undone later by an admin.</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setOrderToDelete(null)}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 font-bold hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={softDeleteOrder}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-red-600 text-white font-bold hover:bg-red-700 transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {orderToEdit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white w-full max-w-md rounded-3xl overflow-hidden shadow-2xl p-6"
+          >
+            <h3 className="text-xl font-bold text-gray-900 mb-4">Edit Order</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Customer Name</label>
+                <input
+                  type="text"
+                  value={orderToEdit.name}
+                  onChange={(e) => setOrderToEdit({ ...orderToEdit, name: e.target.value })}
+                  className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-900 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                <input
+                  type="text"
+                  value={orderToEdit.phone}
+                  onChange={(e) => setOrderToEdit({ ...orderToEdit, phone: e.target.value })}
+                  className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-900 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                <textarea
+                  value={orderToEdit.address}
+                  onChange={(e) => setOrderToEdit({ ...orderToEdit, address: e.target.value })}
+                  className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-900 outline-none"
+                  rows={2}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Final Price (₹)</label>
+                <input
+                  type="number"
+                  value={orderToEdit.finalPrice || orderToEdit.price}
+                  onChange={(e) => setOrderToEdit({ ...orderToEdit, finalPrice: Number(e.target.value) })}
+                  className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-900 outline-none"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setOrderToEdit(null)}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 font-bold hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    await updateDoc(doc(db, 'orders', orderToEdit.id), {
+                      name: orderToEdit.name,
+                      phone: orderToEdit.phone,
+                      address: orderToEdit.address,
+                      finalPrice: orderToEdit.finalPrice || orderToEdit.price
+                    });
+                    toast.success('Order updated successfully');
+                    setOrderToEdit(null);
+                  } catch (error) {
+                    handleFirestoreError(error, OperationType.UPDATE, `orders/${orderToEdit.id}`);
+                    toast.error('Failed to update order');
+                  }
+                }}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-emerald-900 text-white font-bold hover:bg-emerald-800 transition-colors"
+              >
+                Save Changes
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </motion.div>
   );
 }

@@ -25,6 +25,11 @@ interface Order {
   trackingEnabled?: boolean;
   serviceStartTime?: string;
   serviceEndTime?: string;
+  acceptedAt?: string;
+  onTheWayAt?: string;
+  inProgressAt?: string;
+  doneAt?: string;
+  cancelledAt?: string;
   createdAt: any;
 }
 
@@ -109,10 +114,10 @@ export function Orders() {
 
   const getStatusProgress = (status: string) => {
     switch (status) {
-      case 'Pending': return 25;
-      case 'Accepted': return 50;
-      case 'On the way': return 75;
-      case 'In Progress': return 90;
+      case 'Pending': return 0;
+      case 'Accepted': return 25;
+      case 'On the way': return 50;
+      case 'In Progress': return 75;
       case 'Done': return 100;
       case 'Cancelled': return 0;
       default: return 0;
@@ -189,15 +194,42 @@ export function Orders() {
               </div>
 
               {/* Progress Bar */}
-              <div className="mb-4">
-                <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
-                  <motion.div 
-                    initial={{ width: 0 }}
-                    animate={{ width: `${getStatusProgress(order.status)}%` }}
-                    className={`h-full ${order.status === 'Cancelled' ? 'bg-red-500' : 'bg-emerald-500'}`}
-                  />
+              {order.status !== 'Cancelled' ? (
+                <div className="mb-6 mt-2">
+                  <div className="relative flex justify-between">
+                    <div className="absolute top-1/2 left-0 w-full h-1 bg-gray-100 -translate-y-1/2 rounded-full z-0"></div>
+                    <motion.div 
+                      className="absolute top-1/2 left-0 h-1 bg-emerald-500 -translate-y-1/2 rounded-full z-0"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${getStatusProgress(order.status)}%` }}
+                    />
+                    
+                    {[
+                      { label: 'Pending', status: 'Pending', time: order.createdAt?.toDate ? format(order.createdAt.toDate(), 'h:mm a') : '' },
+                      { label: 'Accepted', status: 'Accepted', time: order.acceptedAt ? format(new Date(order.acceptedAt), 'h:mm a') : '' },
+                      { label: 'On way', status: 'On the way', time: order.onTheWayAt ? format(new Date(order.onTheWayAt), 'h:mm a') : '' },
+                      { label: 'Started', status: 'In Progress', time: order.inProgressAt ? format(new Date(order.inProgressAt), 'h:mm a') : '' },
+                      { label: 'Done', status: 'Done', time: order.doneAt ? format(new Date(order.doneAt), 'h:mm a') : '' }
+                    ].map((step, i) => {
+                      const isActive = getStatusProgress(order.status) >= (i * 25);
+                      const isCurrent = order.status === step.status || (order.status === 'Pending' && step.status === 'Pending');
+                      
+                      return (
+                        <div key={step.label} className="relative z-10 flex flex-col items-center">
+                          <div className={`w-4 h-4 rounded-full border-2 ${isActive ? 'bg-emerald-500 border-emerald-500' : 'bg-white border-gray-200'} ${isCurrent ? 'ring-4 ring-emerald-100' : ''}`} />
+                          <span className={`text-[10px] mt-1 font-medium ${isActive ? 'text-emerald-700' : 'text-gray-400'}`}>{step.label}</span>
+                          {step.time && <span className="text-[9px] text-gray-400">{step.time}</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="mb-4 p-3 bg-red-50 rounded-xl border border-red-100 flex flex-col items-center justify-center text-red-700">
+                  <span className="text-sm font-bold">Order Cancelled</span>
+                  {order.cancelledAt && <span className="text-xs mt-1">at {format(new Date(order.cancelledAt), 'h:mm a')}</span>}
+                </div>
+              )}
 
               {/* Service Timer */}
               {order.status === 'In Progress' && order.serviceStartTime && (

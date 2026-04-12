@@ -59,7 +59,7 @@ service cloud.firestore {
     }
 
     function isValidOrder(data) {
-      return hasOnlyAllowedFields(['userId', 'name', 'phone', 'dateTime', 'date', 'slotTime', 'address', 'location', 'serviceType', 'status', 'price', 'finalPrice', 'couponCode', 'discount', 'staffId', 'staffName', 'staffLocationLat', 'staffLocationLng', 'createdAt', 'latitude', 'longitude', 'trackingEnabled', 'serviceStartTime', 'serviceEndTime']) &&
+      return hasOnlyAllowedFields(['userId', 'name', 'phone', 'dateTime', 'date', 'slotTime', 'address', 'location', 'serviceType', 'status', 'price', 'finalPrice', 'couponCode', 'discount', 'staffId', 'staffName', 'staffLocationLat', 'staffLocationLng', 'createdAt', 'latitude', 'longitude', 'trackingEnabled', 'serviceStartTime', 'serviceEndTime', 'deleted', 'acceptedAt', 'onTheWayAt', 'inProgressAt', 'doneAt', 'cancelledAt']) &&
              data.userId is string && data.userId.size() > 0 &&
              data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
              data.phone is string && data.phone.size() > 0 && data.phone.size() <= 50 &&
@@ -83,6 +83,12 @@ service cloud.firestore {
              (!('trackingEnabled' in data) || data.trackingEnabled is bool) &&
              (!('serviceStartTime' in data) || data.serviceStartTime == null || data.serviceStartTime is string) &&
              (!('serviceEndTime' in data) || data.serviceEndTime == null || data.serviceEndTime is string) &&
+             (!('deleted' in data) || data.deleted is bool) &&
+             (!('acceptedAt' in data) || data.acceptedAt == null || data.acceptedAt is string) &&
+             (!('onTheWayAt' in data) || data.onTheWayAt == null || data.onTheWayAt is string) &&
+             (!('inProgressAt' in data) || data.inProgressAt == null || data.inProgressAt is string) &&
+             (!('doneAt' in data) || data.doneAt == null || data.doneAt is string) &&
+             (!('cancelledAt' in data) || data.cancelledAt == null || data.cancelledAt is string) &&
              data.createdAt is timestamp;
     }
 
